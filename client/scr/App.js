@@ -1,18 +1,46 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import videojs from 'video.js';
 import 'video.js/dist/video-js.css';
 import './App.css';
+import './videojs-overrides.css';
 
 function App() {
   const [streamStatus, setStreamStatus] = useState(null);
   const [isBroadcasting, setIsBroadcasting] = useState(false);
-  const [videoElement, setVideoElement] = useState(null);
+  const videoRef = useRef(null);
+  const playerRef = useRef(null);
 
   useEffect(() => {
     checkStreamStatus();
     const interval = setInterval(checkStreamStatus, 5000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    // Initialize player when stream goes live
+    if (streamStatus?.isLive && !isBroadcasting) {
+      if (!playerRef.current && videoRef.current) {
+        playerRef.current = videojs(videoRef.current, {
+          controls: true,
+          autoplay: true,
+          preload: 'auto',
+          fluid: true,
+          sources: [{
+            src: 'http://your-server-ip:8080/hls/stream.m3u8',
+            type: 'application/x-mpegURL'
+          }]
+        });
+      }
+    }
+
+    // Cleanup player when stream ends or component unmounts
+    return () => {
+      if (playerRef.current) {
+        playerRef.current.dispose();
+        playerRef.current = null;
+      }
+    };
+  }, [streamStatus, isBroadcasting]);
 
   const checkStreamStatus = async () => {
     try {
@@ -30,7 +58,6 @@ function App() {
       return;
     }
 
-    // In a real app, you would implement OBS or mobile broadcasting setup
     setIsBroadcasting(true);
     try {
       await fetch('/api/stream/start', {
@@ -57,29 +84,6 @@ function App() {
     }
   };
 
-  useEffect(() => {
-    if (streamStatus?.isLive && !isBroadcasting && !videoElement) {
-      const player = videojs('video-player', {
-        controls: true,
-        autoplay: true,
-        preload: 'auto',
-        fluid: true,
-        sources: [{
-          src: 'http://your-server-ip:8080/hls/stream.m3u8',
-          type: 'application/x-mpegURL'
-        }]
-      });
-      setVideoElement(player);
-    }
-
-    return () => {
-      if (videoElement) {
-        videoElement.dispose();
-        setVideoElement(null);
-      }
-    };
-  }, [streamStatus, isBroadcasting]);
-
   return (
     <div className="min-h-screen bg-gradient-to-b from-pink-50 to-white">
       <header className="py-8 text-center">
@@ -97,17 +101,17 @@ function App() {
           {streamStatus?.isLive ? (
             <div className="mt-8">
               <h2 className="text-2xl mb-4 text-rose-700">Live Stream in Progress</h2>
-              <div data-vjs-player>
+              <div className="video-container" data-vjs-player>
                 <video 
-                  id="video-player"
-                  className="video-js vjs-default-skin vjs-big-play-centered"
+                  ref={videoRef}
+                  className="video-js vjs-big-play-centered vjs-fluid"
                   playsInline
                 />
               </div>
               {isBroadcasting && (
                 <button
                   onClick={stopBroadcasting}
-                  className="mt-4 bg-rose-600 hover:bg-rose-700 text-white font-bold py-3 px-6 rounded-full transition-all"
+                  className="mt-4 btn-wedding"
                 >
                   Stop Broadcasting
                 </button>
@@ -117,13 +121,13 @@ function App() {
             <div className="flex flex-col space-y-4 md:flex-row md:space-y-0 md:space-x-8 justify-center mt-8">
               <button
                 onClick={() => window.location.href = isBroadcasting ? '#' : '/watch'}
-                className="bg-rose-600 hover:bg-rose-700 text-white font-bold py-3 px-6 rounded-full transition-all"
+                className="btn-wedding"
               >
                 Watch Live Stream
               </button>
               <button
                 onClick={startBroadcasting}
-                className="bg-rose-400 hover:bg-rose-500 text-white font-bold py-3 px-6 rounded-full transition-all"
+                className="btn-wedding bg-rose-400 hover:bg-rose-500"
                 disabled={isBroadcasting}
               >
                 {isBroadcasting ? 'Starting Broadcast...' : 'Start Live Stream'}
